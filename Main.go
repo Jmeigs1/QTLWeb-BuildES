@@ -1,6 +1,7 @@
 package main
 
 func main() {
-	BystroToRedis()
-	// mysqlToEs()
+	mysqlToEs()
+	resultToEs()
+	// BystroToRedis()
 }

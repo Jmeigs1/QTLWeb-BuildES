@@ -1,35 +1,60 @@
 package main
 
 import (
-	// "context"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
-	// "strings"
+	"strings"
 )
 import (
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
-	// esapi "github.com/elastic/go-elasticsearch/v7/esapi"
+	esapi "github.com/elastic/go-elasticsearch/v7/esapi"
 	_ "github.com/go-sql-driver/mysql"
 )
 
+var indexMapping = `{
+	"settings":{
+		"index":{
+			"number_of_shards": "1",
+            "number_of_replicas": "0"
+		},
+		"analysis": {
+			"analyzer": {
+				"lowercasespaceanalyzer": {
+					"type": "custom",
+					"tokenizer": "whitespace",
+					"filter": "lowercase"
+				}
+			}
+		}
+	},
+	"mappings": {
+		"properties": {
+			"NonIndexedData": {
+				"type": "object",
+				"enabled": false
+			},
+			"Coordinate": {
+				"type": "text",
+				"analyzer" : "lowercasespaceanalyzer"
+			},
+			"Site": {
+				"type": "integer"
+			},
+			"Start": {
+				"type": "integer"
+			},
+			"End": {
+				"type": "integer"
+			}
+		}
+	}
+}`
+
 func mysqlToEs() {
-
-	db, err := sql.Open("mysql", "genome@tcp(genome-mysql.soe.ucsc.edu:3306)/hg19")
-
-	// queryAndPrint(`SELECT
-	// count(*)
-	// FROM hg19.ensGene AS e
-	// JOIN hg19.knownToEnsembl AS kte ON kte.value = e.name
-	// JOIN hg19.kgXref AS kxr ON kxr.kgID = kte.name
-	// JOIN hg19.knownGene AS kg on kg.name = kte.name
-	// JOIN hg19.knownCanonical as kc on kc.transcript = kxr.kgID
-	// where e.chrom != "chr1" and e.chrom != "chrX" and e.chrom != "chrY"
-	// limit 1`, db)
-
-	// return
 
 	es7, _ := elasticsearch7.NewDefaultClient()
 
@@ -42,18 +67,26 @@ func mysqlToEs() {
 
 	log.Println(elasticsearch7.Version)
 
-	//Recreate index gene
-	if res, err = es7.Indices.Delete([]string{"gene"}); err != nil {
+	//Recreate index searchresults
+	if res, err = es7.Indices.Delete([]string{"searchresults"}); err != nil {
 		log.Fatalf("Cannot delete index: %s", err)
 	}
 
-	res, err = es7.Indices.Create("gene")
+	icr := esapi.IndicesCreateRequest{
+		Index: "searchresults",
+		Body:  strings.NewReader(indexMapping),
+	}
+
+	res, err = icr.Do(context.Background(), es7)
+
 	if err != nil {
 		log.Fatalf("Cannot create index: %s", err)
 	}
 	if res.IsError() {
 		log.Fatalf("Cannot create index: %s", res)
 	}
+
+	db, err := sql.Open("mysql", "genome@tcp(genome-mysql.soe.ucsc.edu:3306)/hg19")
 
 	defer db.Close()
 
@@ -70,7 +103,7 @@ func mysqlToEs() {
     JOIN hg19.kgXref AS kxr ON kxr.kgID = kte.name
     JOIN hg19.knownGene AS kg on kg.name = kte.name
 	JOIN hg19.knownCanonical as kc on kc.transcript = kxr.kgID
-	where e.chrom != "chr1" and e.chrom != "chrX" and e.chrom != "chrY"
+	where e.chrom != "chrX" and e.chrom != "chrY"
 	order by e.name2 ASC`)
 
 	defer rows.Close()
@@ -111,7 +144,7 @@ func mysqlToEs() {
 			panic(err)
 		}
 
-		meta := []byte(fmt.Sprintf(`{ "index" : { "_index" : "%s" } }%s`, "gene", "\n"))
+		meta := []byte(fmt.Sprintf(`{ "index" : { "_index" : "%s" } }%s`, "searchresults", "\n"))
 
 		//Index ES
 		payload := fmt.Sprintf(`{ `+
@@ -142,7 +175,7 @@ func mysqlToEs() {
 		if i == batchsize {
 			res, err = es7.Bulk(
 				bytes.NewReader(buffer.Bytes()),
-				es7.Bulk.WithIndex("gene"),
+				es7.Bulk.WithIndex("searchresults"),
 			)
 			if err != nil {
 				panic(err)
@@ -162,7 +195,24 @@ func mysqlToEs() {
 		} else {
 			i++
 		}
+	}
+	res, err = es7.Bulk(
+		bytes.NewReader(buffer.Bytes()),
+		es7.Bulk.WithIndex("searchresults"),
+	)
 
+	if err != nil {
+		panic(err)
+	} else if res.IsError() {
+		if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
+			log.Fatalf("Failure to to parse response body: %s", err)
+		} else {
+			log.Printf("  Error: [%d] %s: %s",
+				res.StatusCode,
+				raw["error"].(map[string]interface{})["type"],
+				raw["error"].(map[string]interface{})["reason"],
+			)
+		}
 	}
 }
 

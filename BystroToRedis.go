@@ -3,9 +3,10 @@ package main
 import (
 	"compress/gzip"
 	"encoding/csv"
-	"fmt"
+	// "fmt"
 	"io"
 	"os"
+	"time"
 )
 
 import (
@@ -17,12 +18,21 @@ import (
 func BystroToRedis() {
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     "54.92.183.250:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
+		Addr:        "54.175.56.31:6379",
+		Password:    "", // no password set
+		DB:          0,  // use default DB
+		ReadTimeout: time.Minute * 10,
 	})
 
-	redisClient.Ping()
+	ping, err := redisClient.Ping().Result()
+
+	if err != nil {
+		panic(err)
+	}
+
+	log.Println(ping)
+
+	redisClient.FlushDB()
 
 	fh, err := os.Open("bystro/AmpAD.chr1.tsv.gz")
 	if err != nil {
@@ -48,7 +58,12 @@ func BystroToRedis() {
 		panic(err)
 	}
 
+	i := 0
+	j := 0
+	pipe := redisClient.Pipeline()
+
 	for {
+		line := map[string]interface{}{}
 
 		cols, error := reader.Read()
 		if error == io.EOF {
@@ -58,10 +73,33 @@ func BystroToRedis() {
 			panic(error)
 		}
 
-		for i, data := range cols {
-			fmt.Println(header[i], ": ", data)
+		for index, data := range cols {
+			line[header[index]] = data
 		}
-		break
+
+		// fmt.Println("chrom", "\t: ", line["chrom"])
+		// fmt.Println("pos", "\t: ", line["pos"])
+		// fmt.Println("")
+
+		pipe.HMSet(line["chrom"].(string)+":"+line["pos"].(string), line)
+
+		if err != nil {
+			panic(err)
+		}
+
+		if i > 9999 {
+			cmdList, err := pipe.Exec()
+			if err != nil {
+				panic(err)
+			}
+			i = 0
+			j++
+			log.Println("Pipeline sent: ", j)
+			log.Println("Pipeline size: ", len(cmdList))
+		} else {
+			// log.Println(i)
+			i++
+		}
 	}
 
 }
