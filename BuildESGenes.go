@@ -48,16 +48,17 @@ var indexMapping = `{
 			},
 			"Site": {
 				"type": "integer"
-			},
-			"Start": {
-				"type": "integer"
-			},
-			"End": {
-				"type": "integer"
 			}
 		}
 	}
 }`
+
+type geneRelations struct {
+	EnsIDs       map[string]bool
+	UniprotIDs   map[string]bool
+	ProteinNames map[string]bool
+	Chr          string
+}
 
 func mysqlToEs() {
 
@@ -100,15 +101,12 @@ e.name2 "ens_id",
 kxr.spID "uniprot_id",
 kxr.genesymbol "genesymbol",
 kg.name "protein_name",
-e.txStart "start",
-e.txEnd "end",
-e.chrom "chr"
+kg.chrom "chr"
 FROM hg19.knownGene AS kg
 JOIN hg19.knownToEnsembl AS kte ON kte.name = kg.name
 JOIN hg19.kgXref AS kxr ON kxr.kgID = kg.name
-JOIN hg19.knownCanonical as kc on kc.transcript = kg.name
 LEFT JOIN hg19.ensGene AS e on e.name = kte.value
-where e.chrom != "chrX" and e.chrom != "chrY"
+where kg.chrom != "chrX" and kg.chrom != "chrY"
 `
 
 	rows, err := db.Query(query)
@@ -119,20 +117,16 @@ where e.chrom != "chrX" and e.chrom != "chrY"
 		panic(err)
 	}
 
-	var raw map[string]interface{}
-	batchsize := 100
-	i := 0
-	var buffer bytes.Buffer
+	// geneSymbol ->
+	geneSymbolRelationMap := map[string]geneRelations{}
 
 	for rows.Next() {
 
 		var (
 			EnsID       sql.NullString
-			UniprotID   string
-			GeneSymbol  string
-			ProteinName string
-			Start       int
-			End         int
+			UniprotID   sql.NullString
+			GeneSymbol  sql.NullString
+			ProteinName sql.NullString
 			Chr         string
 		)
 
@@ -142,73 +136,105 @@ where e.chrom != "chrX" and e.chrom != "chrY"
 			&UniprotID,
 			&GeneSymbol,
 			&ProteinName,
-			&Start,
-			&End,
 			&Chr,
 		)
-
 		if err != nil {
 			panic(err)
 		}
 
-		meta := []byte(fmt.Sprintf(`{ "index" : { "_index" : "%s" } }%s`, "searchresults", "\n"))
-
-		ensIDline := ""
-
-		if EnsID.Valid {
-			ensIDline = fmt.Sprintf(`"EnsID": "%s",`, EnsID.String)
-		}
-
-		//Index ES
-		payload := fmt.Sprintf(`{ `+
-			`"GeneSymbol":   "%s",`+
-			`"UniprotID":    "%s",`+
-			ensIDline+
-			`"ProteinName":  "%s",`+
-			`"Start":        "%d",`+
-			`"End":          "%d",`+
-			`"Chr":          "%s" `+
-			`}%s`,
-			GeneSymbol,
-			UniprotID,
-			ProteinName,
-			Start,
-			End,
-			Chr,
-			"\n",
-		)
-
-		payloadCast := []byte(payload)
-
-		buffer.Grow(len(payloadCast) + len(meta))
-		buffer.Write(meta)
-		buffer.Write(payloadCast)
-
-		if i == batchsize {
-			res, err = es7.Bulk(
-				bytes.NewReader(buffer.Bytes()),
-				es7.Bulk.WithIndex("searchresults"),
-			)
-			if err != nil {
-				panic(err)
-			} else if res.IsError() {
-				if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
-					log.Fatalf("Failure to to parse response body: %s", err)
-				} else {
-					log.Printf("  Error: [%d] %s: %s",
-						res.StatusCode,
-						raw["error"].(map[string]interface{})["type"],
-						raw["error"].(map[string]interface{})["reason"],
-					)
+		if GeneSymbol.Valid {
+			if _, ok := geneSymbolRelationMap[GeneSymbol.String]; !ok {
+				geneSymbolRelationMap[GeneSymbol.String] = geneRelations{
+					EnsIDs:       map[string]bool{},
+					UniprotIDs:   map[string]bool{},
+					ProteinNames: map[string]bool{},
+					Chr:          Chr,
 				}
 			}
-			buffer.Reset()
-			i = 0
-		} else {
-			i++
+			if EnsID.Valid {
+				if _, ok := geneSymbolRelationMap[GeneSymbol.String].EnsIDs[EnsID.String]; !ok {
+					geneSymbolRelationMap[GeneSymbol.String].EnsIDs[EnsID.String] = true
+				}
+			}
+			if UniprotID.Valid {
+				if _, ok := geneSymbolRelationMap[GeneSymbol.String].UniprotIDs[UniprotID.String]; !ok {
+					geneSymbolRelationMap[GeneSymbol.String].UniprotIDs[UniprotID.String] = true
+				}
+			}
+			if ProteinName.Valid {
+				if _, ok := geneSymbolRelationMap[GeneSymbol.String].ProteinNames[ProteinName.String]; !ok {
+					geneSymbolRelationMap[GeneSymbol.String].ProteinNames[ProteinName.String] = true
+				}
+			}
 		}
 	}
-	res, err = es7.Bulk(
+
+	batchsize := 100
+	i := 0
+	var buffer bytes.Buffer
+
+	for geneSymbol, geneSymbolRelation := range geneSymbolRelationMap {
+
+		addToESBuffer(&buffer, geneSymbol, "GeneSymbol", geneSymbol, geneSymbolRelation.Chr, &i, batchsize, es7)
+
+		for data := range geneSymbolRelation.EnsIDs {
+			addToESBuffer(&buffer, data, "EnsID", geneSymbol, geneSymbolRelation.Chr, &i, batchsize, es7)
+		}
+		for data := range geneSymbolRelation.UniprotIDs {
+			addToESBuffer(&buffer, data, "UniprotID", geneSymbol, geneSymbolRelation.Chr, &i, batchsize, es7)
+		}
+		for data := range geneSymbolRelation.ProteinNames {
+			addToESBuffer(&buffer, data, "ProteinName", geneSymbol, geneSymbolRelation.Chr, &i, batchsize, es7)
+		}
+	}
+
+	sendESPayload(es7, &buffer)
+
+}
+
+func addToESBuffer(
+	buffer *bytes.Buffer,
+	data string,
+	dataLabel string,
+	geneSymbol string,
+	chr string,
+	i *int,
+	batchsize int,
+	es7 *elasticsearch7.Client,
+) {
+	meta := []byte(fmt.Sprintf(`{ "index" : { "_index" : "%s" } }%s`, "searchresults", "\n"))
+
+	payloadMap := map[string]interface{}{
+		dataLabel: data,
+		"Chr":     chr,
+		"NonIndexedData": map[string]interface{}{
+			"GeneSymbol": geneSymbol,
+		},
+	}
+
+	payload, err := json.Marshal(payloadMap)
+	if err != nil {
+		panic(err)
+	}
+
+	payloadCast := []byte(string(payload) + "\n")
+
+	buffer.Grow(len(payloadCast) + len(meta))
+	buffer.Write(meta)
+	buffer.Write(payloadCast)
+
+	if *i == batchsize {
+		sendESPayload(es7, buffer)
+		*i = 0
+	} else {
+		*i++
+	}
+}
+
+func sendESPayload(es7 *elasticsearch7.Client, buffer *bytes.Buffer) {
+	var raw map[string]interface{}
+
+	res, err := es7.Bulk(
 		bytes.NewReader(buffer.Bytes()),
 		es7.Bulk.WithIndex("searchresults"),
 	)
@@ -226,6 +252,8 @@ where e.chrom != "chrX" and e.chrom != "chrY"
 			)
 		}
 	}
+	buffer.Reset()
+
 }
 
 func queryAndPrint(query string, db *sql.DB) {
