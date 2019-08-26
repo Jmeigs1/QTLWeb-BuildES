@@ -37,6 +37,10 @@ var indexMapping = `{
 				"type": "object",
 				"enabled": false
 			},
+			"BystroData": {
+				"type": "object",
+				"enabled": false
+			},
 			"Coordinate": {
 				"type": "text",
 				"analyzer" : "lowercasespaceanalyzer"
