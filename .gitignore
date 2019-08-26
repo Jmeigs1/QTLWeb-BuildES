@@ -1,3 +1,5 @@
 bystro/
 results/
+oldResults/
 *.tsv
+*.csv
