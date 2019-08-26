@@ -109,7 +109,7 @@ JOIN hg19.kgXref AS kxr ON kxr.kgID = kg.name
 JOIN hg19.knownCanonical as kc on kc.transcript = kg.name
 LEFT JOIN hg19.ensGene AS e on e.name = kte.value
 where e.chrom != "chrX" and e.chrom != "chrY"
-order by e.name2 ASC`
+`
 
 	rows, err := db.Query(query)
 
@@ -119,22 +119,22 @@ order by e.name2 ASC`
 		panic(err)
 	}
 
-	var (
-		EnsID       string
-		UniprotID   string
-		GeneSymbol  string
-		ProteinName string
-		Start       int
-		End         int
-		Chr         string
-	)
-
 	var raw map[string]interface{}
 	batchsize := 100
 	i := 0
 	var buffer bytes.Buffer
 
 	for rows.Next() {
+
+		var (
+			EnsID       sql.NullString
+			UniprotID   string
+			GeneSymbol  string
+			ProteinName string
+			Start       int
+			End         int
+			Chr         string
+		)
 
 		//Parse MySql results
 		err = rows.Scan(
@@ -153,11 +153,17 @@ order by e.name2 ASC`
 
 		meta := []byte(fmt.Sprintf(`{ "index" : { "_index" : "%s" } }%s`, "searchresults", "\n"))
 
+		ensIDline := ""
+
+		if EnsID.Valid {
+			ensIDline = fmt.Sprintf(`"EnsID": "%s",`, EnsID.String)
+		}
+
 		//Index ES
 		payload := fmt.Sprintf(`{ `+
 			`"GeneSymbol":   "%s",`+
 			`"UniprotID":    "%s",`+
-			`"EnsID":        "%s",`+
+			ensIDline+
 			`"ProteinName":  "%s",`+
 			`"Start":        "%d",`+
 			`"End":          "%d",`+
@@ -165,7 +171,6 @@ order by e.name2 ASC`
 			`}%s`,
 			GeneSymbol,
 			UniprotID,
-			EnsID,
 			ProteinName,
 			Start,
 			End,

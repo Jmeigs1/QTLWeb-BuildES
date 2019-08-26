@@ -32,6 +32,6 @@ func main() {
 		BystroToMem(chr, cfg.WantedFields, &bystroData)
 		log.Println("len(bystroData)", len(bystroData))
 
-		EqtlResultToEs(chr, cfg.WantedFields, &bystroData)
+		ResultToEs(chr, cfg.WantedFields, &bystroData)
 	}
 }

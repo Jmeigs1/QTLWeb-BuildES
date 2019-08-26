@@ -6,7 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	// "io"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -45,56 +45,56 @@ var ensResultsSets = []resultsSet{
 
 func main() {
 
-	// for _, set := range resultsSets {
-	// 	relationMap := getRelationMap(set.startingKey)
+	for _, set := range resultsSets {
+		relationMap := getRelationMap(set.startingKey)
 
-	// 	for _, dir := range set.dirs {
+		for _, dir := range set.dirs {
 
-	// 		for chr := 1; chr < 23; chr++ {
+			for chr := 1; chr < 23; chr++ {
 
-	// 			output := []byte{}
+				output := []byte{}
 
-	// 			fh, err := os.Open(fmt.Sprintf("%schr%d.csv", dir, chr))
-	// 			if err != nil {
-	// 				panic(err)
-	// 			}
+				fh, err := os.Open(fmt.Sprintf("%schr%d.csv", dir, chr))
+				if err != nil {
+					panic(err)
+				}
 
-	// 			defer fh.Close()
+				defer fh.Close()
 
-	// 			reader := csv.NewReader(fh)
+				reader := csv.NewReader(fh)
 
-	// 			reader.Comma = ','
+				reader.Comma = ','
 
-	// 			for {
-	// 				cols, error := reader.Read()
-	// 				if error == io.EOF {
-	// 					log.Printf("EOF: chr%d %s", chr, dir)
-	// 					break
-	// 				} else if error != nil {
-	// 					panic(error)
-	// 				}
+				for {
+					cols, error := reader.Read()
+					if error == io.EOF {
+						log.Printf("EOF: chr%d %s", chr, dir)
+						break
+					} else if error != nil {
+						panic(error)
+					}
 
-	// 				if val, ok := relationMap[cols[0]]; ok {
-	// 					output = append(output, []byte(val+",")...)
-	// 					output = append(output, []byte(strings.Join(cols, ",")+"\n")...)
+					if val, ok := relationMap[cols[0]]; ok {
+						output = append(output, []byte(val+",")...)
+						output = append(output, []byte(strings.Join(cols, ",")+"\n")...)
 
-	// 				} else {
-	// 					log.Panicf("Value not found in relation map - val [%s] - chr[%d] - dir[%s]",
-	// 						cols[0],
-	// 						chr,
-	// 						dir,
-	// 					)
-	// 				}
-	// 			}
+					} else {
+						log.Panicf("Value not found in relation map - val [%s] - chr[%d] - dir[%s]",
+							cols[0],
+							chr,
+							dir,
+						)
+					}
+				}
 
-	// 			err = ioutil.WriteFile(fmt.Sprintf("%schr%d_fixed.csv", dir, chr), output, 0644)
-	// 			if err != nil {
-	// 				log.Fatalln(err)
-	// 			}
-	// 		}
-	// 	}
+				err = ioutil.WriteFile(fmt.Sprintf("%schr%d_fixed.csv", dir, chr), output, 0644)
+				if err != nil {
+					log.Fatalln(err)
+				}
+			}
+		}
 
-	// }
+	}
 
 	for _, set := range ensResultsSets {
 
