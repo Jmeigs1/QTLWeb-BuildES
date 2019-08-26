@@ -12,13 +12,21 @@ ElasticSearch 7.2.0
 # Setup
 
 ## Download results data
-./getResultsData.sh
+`./getResultsData.sh`
 
 ## Split results into seperate chr files
-./splitResults.sh
+`./splitResults.sh`
+
+## Convert headers
+
+`convertHeaders.sh`
+
+or
+
+`convertHeaders_OSX_BSD.sh`
 
 ## Download annotation data
-./getBystroData.sh
+`./getBystroData.sh`
 
 ## Run program
-go run *.go
+`go run *.go`

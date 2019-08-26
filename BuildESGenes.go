@@ -12,6 +12,7 @@ import (
 import (
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
 	esapi "github.com/elastic/go-elasticsearch/v7/esapi"
+	//Driver for database/sql
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -94,21 +95,23 @@ func mysqlToEs() {
 
 	defer db.Close()
 
-	rows, err := db.Query(`SELECT
-    e.name2 "ens_id",
-    kxr.spDisplayID "uniprot_id",
-    kxr.genesymbol "genesymbol",
-    kg.name "protein_name",
-    e.txStart "start",
-	e.txEnd "end",
-	e.chrom "chr"
-    FROM hg19.ensGene AS e
-    JOIN hg19.knownToEnsembl AS kte ON kte.value = e.name
-    JOIN hg19.kgXref AS kxr ON kxr.kgID = kte.name
-    JOIN hg19.knownGene AS kg on kg.name = kte.name
-	JOIN hg19.knownCanonical as kc on kc.transcript = kxr.kgID
-	where e.chrom != "chrX" and e.chrom != "chrY"
-	order by e.name2 ASC`)
+	query := `SELECT
+e.name2 "ens_id",
+kxr.spID "uniprot_id",
+kxr.genesymbol "genesymbol",
+kg.name "protein_name",
+e.txStart "start",
+e.txEnd "end",
+e.chrom "chr"
+FROM hg19.knownGene AS kg
+JOIN hg19.knownToEnsembl AS kte ON kte.name = kg.name
+JOIN hg19.kgXref AS kxr ON kxr.kgID = kg.name
+JOIN hg19.knownCanonical as kc on kc.transcript = kg.name
+LEFT JOIN hg19.ensGene AS e on e.name = kte.value
+where e.chrom != "chrX" and e.chrom != "chrY"
+order by e.name2 ASC`
+
+	rows, err := db.Query(query)
 
 	defer rows.Close()
 
@@ -117,9 +120,9 @@ func mysqlToEs() {
 	}
 
 	var (
-		GeneSymbol  string
-		UniprotID   string
 		EnsID       string
+		UniprotID   string
+		GeneSymbol  string
 		ProteinName string
 		Start       int
 		End         int
@@ -238,7 +241,7 @@ func queryAndPrint(query string, db *sql.DB) {
 	index := 0
 
 	for rows.Next() {
-		fmt.Println(index)
+		fmt.Println(index + 1)
 		err = rows.Scan(vals...)
 
 		for i, obj := range vals {

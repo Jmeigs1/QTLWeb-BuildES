@@ -1,4 +1,4 @@
-module github.com/jmeigs1/QTLWebESBuilder
+module github.com/jmeigs1/QTLWeb-BuildES
 
 go 1.12
 
