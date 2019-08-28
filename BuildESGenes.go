@@ -142,7 +142,7 @@ where kg.chrom != "chrX" and kg.chrom != "chrY"
 			panic(err)
 		}
 
-		if GeneSymbol.Valid {
+		if GeneSymbol.Valid && !strings.Contains(GeneSymbol.String, " ") {
 			if _, ok := geneSymbolRelationMap[GeneSymbol.String]; !ok {
 				geneSymbolRelationMap[GeneSymbol.String] = geneRelations{
 					EnsIDs:       map[string]bool{},
