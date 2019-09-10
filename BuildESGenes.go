@@ -46,6 +46,14 @@ var indexMapping = `{
 				"type": "text",
 				"analyzer" : "lowercasespaceanalyzer"
 			},
+			"GeneSymbol": {
+				"type": "text",
+				"analyzer" : "lowercasespaceanalyzer"
+			},
+			"ProteinName": {
+				"type": "text",
+				"analyzer" : "lowercasespaceanalyzer"
+			},
 			"Site": {
 				"type": "integer"
 			}
