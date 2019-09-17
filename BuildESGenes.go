@@ -54,6 +54,10 @@ var indexMapping = `{
 				"type": "text",
 				"analyzer" : "lowercasespaceanalyzer"
 			},
+			"UniprotID": {
+				"type": "text",
+				"analyzer" : "lowercasespaceanalyzer"
+			},
 			"Site": {
 				"type": "integer"
 			}
@@ -115,6 +119,7 @@ JOIN hg19.knownToEnsembl AS kte ON kte.name = kg.name
 JOIN hg19.kgXref AS kxr ON kxr.kgID = kg.name
 LEFT JOIN hg19.ensGene AS e on e.name = kte.value
 where kg.chrom != "chrX" and kg.chrom != "chrY"
+and kg.chrom not like "%#_%" ESCAPE "#"
 `
 
 	rows, err := db.Query(query)
