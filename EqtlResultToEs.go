@@ -8,11 +8,18 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	// "strings"
 
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
 )
+
+var columnNames = map[string]string{
+	"Chromosome":         "Chr",
+	"SNPGenomicPosition": "Rel_SNP_Name",
+	"GeneSymbol":         "GeneSymbol",
+}
 
 type searchResult struct {
 	chr   string
@@ -79,7 +86,7 @@ func ResultToEs(chr int, wantedFields []string, bystroMapRef *map[string][]strin
 			log.Println(col)
 		}
 
-		fh, err := os.Open(fmt.Sprintf("%schr%d_fixed.csv", set.dir, chr))
+		fh, err := os.Open(fmt.Sprintf("%schr%d.csv", set.dir, chr))
 		if err != nil {
 			panic(err)
 		}
@@ -92,10 +99,11 @@ func ResultToEs(chr int, wantedFields []string, bystroMapRef *map[string][]strin
 
 		raw := map[string]interface{}{}
 		j := 0
+		counter := 0
 		var buffer bytes.Buffer
 
 		for {
-
+			counter++
 			cols, readerr := csvReader.Read()
 			if readerr == io.EOF {
 
@@ -104,14 +112,15 @@ func ResultToEs(chr int, wantedFields []string, bystroMapRef *map[string][]strin
 			} else {
 
 				bystroData, ok := bystroMap[fmt.Sprintf(
-					"%s:%s", cols[headerMap["Chromosome"]],
-					cols[headerMap["SNPGenomicPosition"]],
+					"%s",
+					cols[headerMap[columnNames["SNPGenomicPosition"]]],
 				)]
 				if !ok {
 					log.Panicf(
-						"Value not found in bystroMap: chr [%d] pos [%d]",
-						headerMap["Chromosome"],
-						headerMap["SNPGenomicPosition"],
+						"Value not found in bystroMap: chr [%s] pos [%s] line [%d]",
+						cols[headerMap[columnNames["Chromosome"]]],
+						cols[headerMap[columnNames["SNPGenomicPosition"]]],
+						counter,
 					)
 				}
 
@@ -121,10 +130,16 @@ func ResultToEs(chr int, wantedFields []string, bystroMapRef *map[string][]strin
 					bystroDataMap[wantedFields[i]] = o
 				}
 
+				chromosome := cols[headerMap[columnNames["Chromosome"]]]
+
+				if !strings.HasPrefix(chromosome, "chr") {
+					chromosome = "chr" + chromosome
+				}
+
 				sr := searchResult{
-					chr:   cols[headerMap["Chromosome"]],
-					pos:   cols[headerMap["SNPGenomicPosition"]],
-					gene:  cols[headerMap["GeneSymbol"]],
+					chr:   chromosome,
+					pos:   cols[headerMap[columnNames["SNPGenomicPosition"]]],
+					gene:  cols[headerMap[columnNames["GeneSymbol"]]],
 					rsNum: bystroDataMap["dbSNP.name"].(string),
 				}
 

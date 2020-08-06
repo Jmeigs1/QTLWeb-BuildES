@@ -9,19 +9,25 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
-)
 
-import (
 	//Driver for database/sql
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
 type resultsSet struct {
 	dirs        []string
 	startingKey string
+}
+
+type columnToFix struct {
+	index int
+	name  string
 }
 
 var resultsSets = []resultsSet{
@@ -44,6 +50,159 @@ var ensResultsSets = []resultsSet{
 }
 
 func main() {
+
+	if len(os.Args) != 2 {
+		fmt.Println("enter the csv to fix as an arg")
+		os.Exit(0)
+	}
+
+	fh, err := os.Open(os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+
+	defer fh.Close()
+
+	reader := csv.NewReader(fh)
+
+	reader.Comma = ','
+
+	buf := bytes.Buffer{}
+
+	err = fixGeneSymbols(reader, &buf)
+	if err != nil {
+		panic(err)
+	}
+
+	err = ioutil.WriteFile("test.csv", buf.Bytes(), 0644)
+	if err != nil {
+		panic(err)
+	}
+
+}
+
+func fixGeneSymbols(reader *csv.Reader, buf *bytes.Buffer) error {
+
+	GeneSymbolCol := -1
+	GeneSymbolColName := "GeneSymbol"
+	EnsIdCol := -1
+	EnsIdColName := "GeneID"
+	UniProtIdCol := -1
+	UniProtIdColName := "FeatureName"
+
+	grm := getRelationMap("UniprotID")
+
+	// Re-Write header
+	cols, err := reader.Read()
+	if err != nil {
+		return err
+	}
+	for i, col := range cols {
+		if col == GeneSymbolColName {
+			GeneSymbolCol = i
+		} else if col == EnsIdColName {
+			EnsIdCol = i
+		} else if col == UniProtIdColName {
+			UniProtIdCol = i
+		}
+		buf.WriteString(col + ",")
+	}
+	buf.WriteString(fmt.Sprintln(""))
+
+	if GeneSymbolCol == -1 {
+		return fmt.Errorf("Column %s not found in header", GeneSymbolColName)
+	} else if EnsIdCol == -1 {
+		return fmt.Errorf("Column %s not found in header", EnsIdColName)
+	} else if UniProtIdCol == -1 {
+		return fmt.Errorf("Column %s not found in header", UniProtIdColName)
+	}
+
+	for {
+		cols, err := reader.Read()
+		if err == io.EOF {
+			log.Printf("EOF: findMissingSymbols()")
+			break
+		} else if err != nil {
+			return err
+		}
+
+		oldGeneSymbol := cols[GeneSymbolCol]
+		newGeneSymbol := ""
+		semiColIndex := strings.Index(oldGeneSymbol, ";")
+
+		if semiColIndex != -1 {
+			// Check for multiple gene symbols
+			newGeneSymbol = oldGeneSymbol[0:semiColIndex]
+
+		} else if oldGeneSymbol == "NA" || oldGeneSymbol == "" {
+			// Check for NA and blank geneSymbols
+
+			if val, ok := grm[cols[UniProtIdCol]]; ok {
+				newGeneSymbol = val
+			} else {
+				return fmt.Errorf("Value %s not found in Gene Relation Map", val)
+			}
+
+		} else {
+			newGeneSymbol = oldGeneSymbol
+		}
+
+		for i, col := range cols {
+			if i == GeneSymbolCol {
+				buf.WriteString(newGeneSymbol + ",")
+			} else {
+				buf.WriteString(col + ",")
+			}
+		}
+		buf.WriteString(fmt.Sprintln(""))
+	}
+
+	return nil
+}
+
+func addLog10PVal(reader *csv.Reader, buf *bytes.Buffer) error {
+
+	const pValCol int = 8
+
+	// Re-Write header
+	cols, err := reader.Read()
+	if err != nil {
+		return err
+	}
+	for _, col := range cols {
+		buf.WriteString(col + ",")
+	}
+
+	// Append new col name
+	buf.WriteString(fmt.Sprintf("%s\n", "log10pvalue"))
+
+	for {
+		cols, err := reader.Read()
+		if err == io.EOF {
+			log.Printf("EOF: addLog10PVal()")
+			break
+		} else if err != nil {
+			return err
+		}
+
+		pval, err := strconv.ParseFloat(cols[pValCol], 64)
+		if err != nil {
+			return err
+		}
+
+		negLog10p := -1 * math.Log10(pval)
+
+		for _, col := range cols {
+			buf.WriteString(col + ",")
+		}
+
+		buf.WriteString(fmt.Sprintf("%f\n", negLog10p))
+	}
+
+	return nil
+}
+
+func oldMain() {
 
 	for _, set := range resultsSets {
 		relationMap := getRelationMap(set.startingKey)

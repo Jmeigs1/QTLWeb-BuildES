@@ -9,10 +9,9 @@ import (
 	"log"
 	"os"
 	"runtime"
-	// "time"
-)
 
-import (
+	// "time"
+
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -99,7 +98,7 @@ func BystroToMem(chr int, wantedFields []string, bystroMapRef *map[string][]stri
 			line = append(line, cols[index])
 		}
 
-		bystroMap[cols[chromIndex]+":"+cols[posIndex]] = line
+		bystroMap[cols[posIndex]] = line
 		i++
 		if i%11837 == 0 {
 			j++
