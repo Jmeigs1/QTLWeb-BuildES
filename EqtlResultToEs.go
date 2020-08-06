@@ -8,10 +8,9 @@ import (
 	"io"
 	"log"
 	"os"
-	// "strings"
-)
 
-import (
+	// "strings"
+
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
 )
 
@@ -28,18 +27,18 @@ type resultsSet struct {
 }
 
 var resultsSets = []resultsSet{
-	resultsSet{
+	{
 		dir:  "results/pqtl/",
 		name: "pqtl",
 	},
-	resultsSet{
-		dir:  "results/pqtl-overlap/",
-		name: "pqtlOverlap",
-	},
-	resultsSet{
-		dir:  "results/eqtl-overlap/",
-		name: "eqtlOverlap",
-	},
+	// {
+	// 	dir:  "results/pqtl-overlap/",
+	// 	name: "pqtlOverlap",
+	// },
+	// {
+	// 	dir:  "results/eqtl-overlap/",
+	// 	name: "eqtlOverlap",
+	// },
 }
 
 //ResultToEs sends eqtl results to ElasticSearch

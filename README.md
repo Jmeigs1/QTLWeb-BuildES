@@ -14,7 +14,7 @@ ElasticSearch 7.2.0
 ## Download results data
 `./getResultsData.sh`
 
-## Split results into seperate chr files
+## Split results into separate chr files
 `./splitResults.sh`
 
 ## Convert headers
