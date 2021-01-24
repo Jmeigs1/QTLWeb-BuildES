@@ -15,7 +15,7 @@ ElasticSearch 7.2.0
 `./getResultsData.sh`
 
 ## Run FixResults
-This is temp fix
+This is a one time fix.  Upload to s3 once complete.
 
 `cd FixResults && go build`
 
