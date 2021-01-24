@@ -1,24 +1,15 @@
 #!/bin/bash
 
-# awk -F "\"*,\"*" \
-# '{print >> ("results/eqtl-overlap/"$2".csv");
-# close("results/eqtl-overlap/"$2".csv")}' \
-# results/eqtl-overlap/eQTLoverlappQTL_for_brainqtl_Aug21.csv
-# mv results/eqtl-overlap/Chromosome.csv results/eqtl-overlap/Header.csv
+results=("results/banner/BannerBBDP_DLPFC_pQTLs_fixed.csv" "results/rosmap/ROSMAP_DLPFC_pQTLs_fixed.csv" "results/rosmap_control/ROSMAP_NCI_DLPFC_pQTLs_fixed.csv")
 
-# awk -F "\"*,\"*" \
-# '{print >> ("results/pqtl-overlap/"$2".csv");
-# close("results/pqtl-overlap/"$2".csv")}' \
-# results/pqtl-overlap/pQTLoverlapeQTL_for_brainqtl_Aug21.csv
-# mv results/pqtl-overlap/Chromosome.csv results/pqtl-overlap/Header.csv
+for r in ${results[@]}; do
+    awk -v dir=$(dirname $r) -F "\"*,\"*" \
+    '{print >> (dir"/chr"$1".csv");
+    close(dir"/chr"$1".csv")}' \
+    $r
 
-sed -i 's/^/,/' results/pqtl/brainQTL_July2020.csv
-awk -F "\"*,\"*" \
-'{print >> ("results/pqtl/chr"$2".csv");
-close("results/pqtl/chr"$2".csv")}' \
-results/pqtl/brainQTL_July2020.csv
-mv results/pqtl/chrChr.csv results/pqtl/Header.csv
-sed -i 's/^.//' results/pqtl/*.csv
+    mv $(dirname $r)/chrChr.csv $(dirname $r)/Header.csv
+done
 
 # Assumes chr is the first column
 # TODO: Parse column headers for "chr" or "Chromosome"
