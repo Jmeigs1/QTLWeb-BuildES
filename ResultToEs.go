@@ -35,17 +35,17 @@ type resultsSet struct {
 
 var resultsSets = []resultsSet{
 	{
-		dir:  "results/pqtl/",
-		name: "pqtl",
+		dir:  "results/banner/",
+		name: "banner",
 	},
-	// {
-	// 	dir:  "results/pqtl-overlap/",
-	// 	name: "pqtlOverlap",
-	// },
-	// {
-	// 	dir:  "results/eqtl-overlap/",
-	// 	name: "eqtlOverlap",
-	// },
+	{
+		dir:  "results/rosmap/",
+		name: "banner",
+	},
+	{
+		dir:  "results/rosmap_control/",
+		name: "banner",
+	},
 }
 
 //ResultToEs sends eqtl results to ElasticSearch
