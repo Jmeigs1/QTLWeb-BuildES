@@ -14,6 +14,14 @@ ElasticSearch 7.2.0
 ## Download results data
 `./getResultsData.sh`
 
+## Run FixResults
+This is temp fix
+
+`cd FixResults && go build`
+
+`./fixresults ../results/pqtl/brainQTL_July2020.csv  && mv test.csv ../results/pqtl/brainQTL_July2020.csv`
+
+
 ## Split results into separate chr files
 `./splitResults.sh`
 

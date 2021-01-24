@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/csv"
@@ -19,6 +20,13 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 )
+
+// For posterity
+// Does 2 things
+// Maps Uniprot ID to ENS ID and HGNC Gene Symbol
+// Add's log10pvalue
+
+// Previously also checked for missing, NA, or multiple values (containing semi colon) in any of the gene symbol fields (Uniprot, ens id, genesymbol)
 
 type resultsSet struct {
 	dirs        []string
@@ -74,21 +82,25 @@ func main() {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile("test.csv", buf.Bytes(), 0644)
-	if err != nil {
-		panic(err)
-	}
+	f := bufio.NewWriter(os.Stdout)
+	defer f.Flush()
+	f.Write(buf.Bytes())
 
 }
 
 func fixGeneSymbols(reader *csv.Reader, buf *bytes.Buffer) error {
 
-	GeneSymbolCol := -1
+	// GeneSymbolCol := -1
 	GeneSymbolColName := "GeneSymbol"
-	EnsIdCol := -1
-	EnsIdColName := "GeneID"
-	UniProtIdCol := -1
-	UniProtIdColName := "FeatureName"
+	// Log10PValueCol := -1
+	Log10PValueColName := "log10pvalue"
+
+	// EnsIDColName := "GeneID"
+
+	UniProtIDCol := -1
+	UniProtIDColName := "FeatureName"
+	PValueCol := -1
+	PValueColName := "pvalue"
 
 	grm := getRelationMap("UniprotID")
 
@@ -98,108 +110,70 @@ func fixGeneSymbols(reader *csv.Reader, buf *bytes.Buffer) error {
 		return err
 	}
 	for i, col := range cols {
-		if col == GeneSymbolColName {
-			GeneSymbolCol = i
-		} else if col == EnsIdColName {
-			EnsIdCol = i
-		} else if col == UniProtIdColName {
-			UniProtIdCol = i
+		if col == UniProtIDColName {
+			UniProtIDCol = i
+		} else if col == PValueColName {
+			PValueCol = i
 		}
-		buf.WriteString(col + ",")
 	}
+
+	header := strings.Join(cols, ",")
+
+	// GeneSymbolCol = len(cols) + 1
+	header = strings.Join([]string{header, GeneSymbolColName}, ",")
+
+	// Log10PValueCol = len(cols) + 2
+	header = strings.Join([]string{header, Log10PValueColName}, ",")
+
+	buf.WriteString(header)
 	buf.WriteString(fmt.Sprintln(""))
 
-	if GeneSymbolCol == -1 {
-		return fmt.Errorf("Column %s not found in header", GeneSymbolColName)
-	} else if EnsIdCol == -1 {
-		return fmt.Errorf("Column %s not found in header", EnsIdColName)
-	} else if UniProtIdCol == -1 {
-		return fmt.Errorf("Column %s not found in header", UniProtIdColName)
+	if UniProtIDCol == -1 {
+		return fmt.Errorf("Column %s not found in header", UniProtIDColName)
+	} else if PValueCol == -1 {
+		return fmt.Errorf("Column %s not found in header", PValueColName)
 	}
 
 	for {
 		cols, err := reader.Read()
 		if err == io.EOF {
-			log.Printf("EOF: findMissingSymbols()")
 			break
 		} else if err != nil {
 			return err
 		}
 
-		oldGeneSymbol := cols[GeneSymbolCol]
 		newGeneSymbol := ""
-		semiColIndex := strings.Index(oldGeneSymbol, ";")
 
-		if semiColIndex != -1 {
-			// Check for multiple gene symbols
-			newGeneSymbol = oldGeneSymbol[0:semiColIndex]
-
-		} else if oldGeneSymbol == "NA" || oldGeneSymbol == "" {
-			// Check for NA and blank geneSymbols
-
-			if val, ok := grm[cols[UniProtIdCol]]; ok {
-				newGeneSymbol = val
-			} else {
-				return fmt.Errorf("Value %s not found in Gene Relation Map", val)
-			}
-
+		if val, ok := grm[cols[UniProtIDCol]]; ok {
+			newGeneSymbol = val
 		} else {
-			newGeneSymbol = oldGeneSymbol
+			return fmt.Errorf("Value %s not found in Gene Relation Map", val)
 		}
 
-		for i, col := range cols {
-			if i == GeneSymbolCol {
-				buf.WriteString(newGeneSymbol + ",")
-			} else {
-				buf.WriteString(col + ",")
-			}
+		log10pvalResult, err := log10PVal(cols[PValueCol])
+		if err != nil {
+			return err
 		}
+		out := cols
+		out = append(out, newGeneSymbol, log10pvalResult)
+
+		buf.WriteString(strings.Join(out, ","))
 		buf.WriteString(fmt.Sprintln(""))
 	}
 
 	return nil
 }
 
-func addLog10PVal(reader *csv.Reader, buf *bytes.Buffer) error {
+func log10PVal(pval string) (string, error) {
 
-	const pValCol int = 8
-
-	// Re-Write header
-	cols, err := reader.Read()
+	parsedPval, err := strconv.ParseFloat(pval, 64)
 	if err != nil {
-		return err
-	}
-	for _, col := range cols {
-		buf.WriteString(col + ",")
+		return "", err
 	}
 
-	// Append new col name
-	buf.WriteString(fmt.Sprintf("%s\n", "log10pvalue"))
+	negLog10p := -1 * math.Log10(parsedPval)
 
-	for {
-		cols, err := reader.Read()
-		if err == io.EOF {
-			log.Printf("EOF: addLog10PVal()")
-			break
-		} else if err != nil {
-			return err
-		}
-
-		pval, err := strconv.ParseFloat(cols[pValCol], 64)
-		if err != nil {
-			return err
-		}
-
-		negLog10p := -1 * math.Log10(pval)
-
-		for _, col := range cols {
-			buf.WriteString(col + ",")
-		}
-
-		buf.WriteString(fmt.Sprintf("%f\n", negLog10p))
-	}
-
-	return nil
+	return fmt.Sprintf("%v", negLog10p), nil
 }
 
 func oldMain() {
