@@ -11,16 +11,13 @@ ElasticSearch 7.2.0
 
 # Setup
 
-## Download results data
-`./getResultsData.sh`
-
 ## Run FixResults
 This is a one time fix.  Upload to s3 once complete.
 
-`cd FixResults && go build`
+`cd FixResults && go build && runall.sh`
 
-`./fixresults ../results/pqtl/brainQTL_July2020.csv  && mv test.csv ../results/pqtl/brainQTL_July2020.csv`
-
+## Download results data
+`./getResultsData.sh`
 
 ## Split results into separate chr files
 `./splitResults.sh`
