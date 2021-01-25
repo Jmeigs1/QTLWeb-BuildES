@@ -35,21 +35,28 @@ type resultsSet struct {
 
 var resultsSets = []resultsSet{
 	{
-		dir:  "results/banner/",
-		name: "banner",
-	},
-	{
 		dir:  "results/rosmap/",
-		name: "banner",
+		name: "rosmap",
 	},
 	{
 		dir:  "results/rosmap_control/",
+		name: "rosmap_control",
+	},
+	{
+		dir:  "results/banner/",
 		name: "banner",
 	},
 }
 
 //ResultToEs sends eqtl results to ElasticSearch
 func ResultToEs(chr int, wantedFields []string, bystroMapRef *map[string][]string) {
+
+	f, err := os.OpenFile("missing.log",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+	defer f.Close()
 
 	for _, set := range resultsSets {
 
@@ -116,12 +123,23 @@ func ResultToEs(chr int, wantedFields []string, bystroMapRef *map[string][]strin
 					cols[headerMap[columnNames["SNPGenomicPosition"]]],
 				)]
 				if !ok {
-					log.Panicf(
-						"Value not found in bystroMap: chr [%s] pos [%s] line [%d]",
-						cols[headerMap[columnNames["Chromosome"]]],
-						cols[headerMap[columnNames["SNPGenomicPosition"]]],
-						counter,
+					f.WriteString(
+						fmt.Sprintf(
+							"Value not found in bystroMap: set [%s] chr [%s] pos [%s] line [%d]\n",
+							set.name,
+							cols[headerMap[columnNames["Chromosome"]]],
+							cols[headerMap[columnNames["SNPGenomicPosition"]]],
+							counter,
+						),
 					)
+
+					continue
+					// log.Panicf(
+					// 	"Value not found in bystroMap: chr [%s] pos [%s] line [%d]",
+					// 	cols[headerMap[columnNames["Chromosome"]]],
+					// 	cols[headerMap[columnNames["SNPGenomicPosition"]]],
+					// 	counter,
+					// )
 				}
 
 				bystroDataMap := map[string]interface{}{}
